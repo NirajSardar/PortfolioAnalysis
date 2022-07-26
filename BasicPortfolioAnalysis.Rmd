@@ -1,0 +1,132 @@
+---
+title: "portfolioAnalysis"
+author: "Niraj Sardar"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(quantmod)
+```
+
+## Mean Value analysis of portfolio
+
+### A. Loading Ticker Data
+```{r}
+
+ticks <- c("^GSPC", "CAT", "LLY")
+
+retout <- NULL
+retout <- xts(retout)
+
+for(i in 1:length(ticks)){
+  prices <-  getSymbols(ticks[i], auto.assign = F)
+  returns <- periodReturn(prices, period = "monthly", 
+                          type = "arithmetic")
+  retout <- merge.xts(retout, returns)
+}
+
+colnames(retout) <- ticks
+retout = retout['2013/2016']
+head(retout)
+```
+
+### B. Calculating mean vector and covariance matrix
+
+
+```{r}
+meanret <- apply(retout,2,mean)
+meanret
+
+
+covar <- var(retout)
+covar
+```
+
+```{r}
+weight <- c(0, .4, .6)
+
+```
+
+### C. Calculating portfolio mean and variance
+
+```{r}
+
+rp <- weight[2]*meanret[2] + weight[3]*meanret[3]
+rp <- unname(rp) # otherwise picks up second ticker as dimname
+rp
+
+```
+
+
+```{r}
+sig2p <- weight[2]^2*covar[2,2]+weight[3]^2*covar[3,3]+2*weight[2]*weight[3]*covar[2,3]
+sig2p
+
+```
+
+
+```{r}
+sqrt(sig2p)
+```
+
+
+### D. Calculating using matrix multiplication
+
+```{r}
+
+weight <- as.matrix(weight)
+dim(weight)
+
+meanret <- as.matrix(meanret)
+dim(meanret)
+
+```
+
+Use matrix multiplication to calculate portfolio metrics:
+
+```{r}
+rp <- t(weight) %*% meanret
+rp
+
+sig2p <- t(weight) %*% covar %*% weight
+sig2p
+
+sigp <- sqrt(sig2p)   # portfolio sigma
+sigp
+
+```
+
+
+Matrix algebra is useful inorder to avoid complex for loops.
+
+## E. Feasible Set with these two assets
+
+Now we are ready to do multiple computations. Simulate various portfolios and calculate mean and sigma.
+
+
+```{r}
+
+# initialize a counter and the results matrix
+kount <- 0
+Results <- matrix(data = NA, nrow = length(seq(.05,.95,.05)), ncol = 4)
+
+for (i in seq(.05,0.95,.05)){
+    kount <- kount + 1 # counter for portfolio number
+    Results[kount,1] = weight[2,1] = i        # weight of security 1
+    Results[kount,2] = weight[3,1] = 1-i      # weight of security 2
+    Results[kount,3] <- t(weight) %*% meanret # portfolio mean
+    Results[kount,4] <- sqrt(t(weight) %*% covar %*% weight) # portfolio sigma
+}
+colnames(Results) <- c(paste0(ticks[2], '%'), paste0(ticks[3], '%'), "Port_Mean", "Port_Sigma")
+
+Results
+
+```
+
+Plot feasible set
+
+```{r}
+
+plot(x = Results[,4], y = Results[,3], xlab = "Portfolio Sigma", ylab = "Portfolio Mean")
+
+```

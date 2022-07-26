@@ -1,0 +1,164 @@
+---
+title: "Portfolio Efficient Set"
+author: "Niraj Sardar"
+output: html_document
+---
+
+Loading libraries
+
+```{r}
+library(quantmod)
+library(ggplot2)
+library(dplyr)
+```
+
+
+```{r}
+ticks <- c("STZ", "CAT", "LLY", "CBRL")
+
+retout <- NULL
+retout <- xts(retout)
+
+for(i in 1:length(ticks)){
+  prices = getSymbols(ticks[i], auto.assign = F)
+  returns <- periodReturn(prices, period = "monthly", 
+                          type = "arithmetic")
+  retout <- merge.xts(retout, returns)
+}
+colnames(retout) <- ticks
+retout <- retout['2010/2015']
+retout <- na.omit(retout)
+head(retout)
+
+```
+
+### B. Calculate means and covariance matrix
+
+```{r}
+meanret <- colMeans(retout,na.rm = T)
+x1 = round(meanret, 5)
+cat("The mean vector :\n")
+print(x1)
+
+```
+
+
+```{r}
+covar <- var(retout)
+x2 = round(covar, 8)
+cat("The covariance matrix: \n")
+print(x2)
+
+```
+
+### C. Creating  one portfolio as an example to showcase method
+
+The weight vector contains weights for each security. Weights add to 1.
+
+```{r}
+weight <- c(.2, .3, .3, .2)
+```
+
+Calculate portfolio variance Using matrix algebra
+
+```{r}
+weight <- as.matrix(weight)
+dim(weight)
+
+meanret <- as.matrix(meanret)
+dim(meanret)
+
+mretp <- t(weight) %*% meanret
+sretp <- sqrt(t(weight) %*% covar %*% weight)
+
+cat("The mean and sigma of portfolio returns: ", mretp, sretp)
+```
+
+### D. Run simulation with random weights
+
+First, for niter iterations, let’s create random portfolio weights.
+
+
+```{r}
+set.seed(12)
+niter <- 500   # Set the number of iterations here
+randomnums <- data.frame(replicate(4, runif(niter, 1, 10)))
+
+head(randomnums)
+
+wt_sim <- randomnums / rowSums(randomnums)
+cat("The weights after normalization are in wt_sim...")
+
+head(wt_sim)
+
+
+```
+
+Initializing Variables.
+
+```{r}
+# initialize weight and Results matrices
+weight <- matrix(data = NA, nrow = length(ticks), ncol = 1)
+Results <- matrix(data = NA, nrow = niter, ncol = 6)
+```
+
+Run the simulations - this means, do portfolio calculations for each simulated portfolio.
+
+```{r}
+
+# loop: each i is a portfolio
+for (i in 1:niter){
+
+    # inner loop places weights into Results
+    for (k in 1:length(ticks)) {
+             Results[i,k] = weight[k,1] = wt_sim[i,k]
+    }
+
+    Results[i,5] <- t(weight) %*% meanret                # portfolio mean
+    Results[i,6] <- sqrt(t(weight) %*% covar %*% weight) # portfolio sigma
+}
+
+colnames(Results) <- c(ticks, "PortMean", "PortSigma")
+Results <- as.data.frame(Results)
+head(Results)
+
+```
+
+Plotting the results.
+
+```{r}
+ggplot(data = Results , aes(x = PortSigma, y = PortMean)) +
+    geom_point(pch = 10, colour = "red", size = 3)
+```
+
+### E.  Optimization
+
+Again, risk is bad while return is good, so one way to select the best portfolio(s) is to identify a constraint based on one of these dimensions, and locate the best portfolio using the other.
+
+```{r}
+
+minmret = min(Results$PortMean)
+maxmret = max(Results$PortMean)
+seqmret = seq(round(minmret,3)-.001, maxmret+.001, .001)
+
+optim <- Results %>% mutate(portnumber = index(Results)) %>%
+    mutate(ints = cut(PortMean ,breaks = seqmret), 
+           lower = as.numeric( sub("\\((.+),.*", "\\1", ints) )) %>% 
+    group_by(ints) %>% 
+    summarise( lowerval = min(lower),
+               sig_optim = min(PortSigma), 
+               retn_optim = PortMean[which.min(PortSigma)],
+               numb = length(PortSigma), 
+               portID=portnumber[which.min(PortSigma)])
+
+optim
+
+
+ggplot(data = optim , aes(x = sig_optim, y = retn_optim)) +
+    geom_point(pch = 10, colour = "red", size = 3)
+```
+
+
+```{r}
+
+```
